@@ -10,12 +10,15 @@ from aiogram.types import (
     InlineKeyboardButton,
 )
 
+# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
+# Инициализация бота и диспетчера
 bot = Bot(token='6584652808:AAGdp1-TcXf9RkHiiF9Fuji9w3c46do67Vo')
 dp = Dispatcher(bot)
 dp.middleware.setup(LoggingMiddleware())
 
+# Создание основной клавиатуры
 main_keyboard = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False, row_width=2)
 button1 = KeyboardButton('Мои командировки')
 button2 = KeyboardButton('Добавить расходы')
@@ -24,6 +27,7 @@ button4 = KeyboardButton('Завершить командировку')
 button5 = KeyboardButton('Как пользоваться')
 main_keyboard.add(button1, button2, button3, button4, button5)
 
+# Создание клавиатуры расходов
 expenses_keyboard = InlineKeyboardMarkup()
 expenses_keyboard.add(
     InlineKeyboardButton(text="Билеты", callback_data="tickets"),
@@ -33,11 +37,13 @@ expenses_keyboard.add(
 
 expense_type = None
 
+# Функция для запроса суммы расхода у пользователя
 async def ask_expense_amount(chat_id, expense_name):
     global expense_type
     expense_type = expense_name
     await bot.send_message(chat_id, f"Добавляем статью расхода: {expense_name}\nУкажите сумму:")
 
+# Обработчик нажатий кнопок расходов
 @dp.callback_query_handler(lambda c: c.data in ["tickets", "accommodation", "entertainment"])
 async def process_expense_buttons(callback_query: types.CallbackQuery):
     data = callback_query.data
@@ -52,6 +58,7 @@ async def process_expense_buttons(callback_query: types.CallbackQuery):
     await ask_expense_amount(callback_query.from_user.id, expense_name)
     await bot.answer_callback_query(callback_query.id)
 
+# Обработчик сообщений с суммами для статей расходов
 @dp.message_handler(lambda message: message.text and expense_type, content_types=types.ContentType.TEXT)
 async def amount_input_handler(message: types.Message):
     global expense_type
@@ -62,11 +69,14 @@ async def amount_input_handler(message: types.Message):
     except ValueError:
         await bot.send_message(message.chat.id, "Некорректное значение суммы. Введите число:")
 
+# Обработчик сообщений с фотографиями чеков для статей расходов
 @dp.message_handler(lambda message: message.photo != None and expense_type, content_types=types.ContentType.PHOTO)
 async def photo_handler(message: types.Message):
     global expense_type
     await bot.send_message(message.chat.id, f"Статья расхода: {expense_type}\nСумма уже введена\nФото чека добавлено.", reply_markup=main_keyboard)
     expense_type = None
+
+# Функция для генерации пагинатора список командировок
 def generate_trips_paginator(trips, current_page):
     keyboard = InlineKeyboardMarkup()
     for trip in trips[current_page * 5:(current_page * 5) + 5]:
@@ -82,21 +92,26 @@ def generate_trips_paginator(trips, current_page):
 
     return keyboard
 
+# Функция для отображения списка командировок пользователя
 async def display_business_trips(chat_id, trips, current_page):
     await bot.send_message(chat_id, "Выберите командировку:", reply_markup=generate_trips_paginator(trips, current_page))
 
+# Функция для генерации списка командировок (заглушка)
 def generate_business_trips():
     trips = [f'Командировка {i}' for i in range(1, 11)]
     return trips
 
+# Обработчик команды /start
 @dp.message_handler(commands=['start'])
 async def start_message_handler(message: types.Message):
     await bot.send_message(message.chat.id, "Выберите действие из предложенного списка:", reply_markup=main_keyboard)
 
+# Обработчик неизвестных команд
 @dp.message_handler(lambda message: message.text not in [button1.text, button2.text, button3.text, button4.text, button5.text], content_types=types.ContentType.TEXT)
 async def text_message_handler(message: types.Message):
     await bot.send_message(message.chat.id, "Неизвестная команда. Пожалуйста, выберите действие из предложенного списка:", reply_markup=main_keyboard)
 
+# Обработчик нажатий кнопок основного меню
 @dp.message_handler(lambda message: message.text in [button1.text, button2.text, button3.text, button4.text, button5.text], content_types=types.ContentType.TEXT)
 async def menu_buttons_handler(message: types.Message):
     if message.text == button1.text:
@@ -112,6 +127,7 @@ async def menu_buttons_handler(message: types.Message):
     elif message.text == button5.text:
         await bot.send_message(message.chat.id, "Как пользоваться ботом?", reply_markup=main_keyboard)
 
+# Обработчик ввода даты начала командировки
 @dp.message_handler(lambda message: message.reply_to_message and message.reply_to_message.text.endswith("формате ДД.ММ.ГГ"), content_types=types.ContentType.TEXT)
 async def date_input_handler(message: types.Message):
     entered_date = message.text
@@ -121,11 +137,13 @@ async def date_input_handler(message: types.Message):
     except:
         await bot.send_message(message.chat.id, "Неверный формат. Укажите дату начала командировки в формате ДД.ММ.ГГ", reply_markup=main_keyboard)
 
+# Обработчик кнопки возврата в основное меню
 @dp.callback_query_handler(lambda c: c.data == 'main_menu')
 async def process_callback_button1(callback_query: types.CallbackQuery):
     await bot.send_message(callback_query.from_user.id, "Выберите действие из предложенного списка:", reply_markup=main_keyboard)
     await bot.answer_callback_query(callback_query.id)
 
+# Обработчик прочих действий пагинатора и кнопок
 @dp.callback_query_handler(lambda c: True)
 async def process_callback_button2(callback_query: types.CallbackQuery):
     data = callback_query.data.split(':')
@@ -144,6 +162,7 @@ async def process_callback_button2(callback_query: types.CallbackQuery):
 
     await bot.answer_callback_query(callback_query.id)
 
+# Запуск бота
 async def main():
     await dp.start_polling()
 
