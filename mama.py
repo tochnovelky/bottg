@@ -37,6 +37,9 @@ expenses_keyboard.add(
 
 expense_type = None
 
+# Создание переменной для хранения открытых командировок
+open_trips = {}
+
 # Функция для запроса суммы расхода у пользователя
 async def ask_expense_amount(chat_id, expense_name):
     global expense_type
@@ -75,6 +78,13 @@ async def photo_handler(message: types.Message):
     global expense_type
     await bot.send_message(message.chat.id, f"Статья расхода: {expense_type}\nСумма уже введена\nФото чека добавлено.", reply_markup=main_keyboard)
     expense_type = None
+
+# Функция для генерации клавиатуры с открытыми командировками
+def generate_open_trips_keyboard():
+    keyboard = InlineKeyboardMarkup()
+    for key, value in open_trips.items():
+        keyboard.add(InlineKeyboardButton(text=value, callback_data=f"open_trip:{key}"))
+    return keyboard
 
 # Функция для генерации пагинатора список командировок
 def generate_trips_paginator(trips, current_page):
@@ -122,8 +132,10 @@ async def menu_buttons_handler(message: types.Message):
     elif message.text == button3.text:
         await bot.send_message(message.chat.id, "Укажите дату начала командировки в формате ДД.ММ.ГГ")
     elif message.text == button4.text:
-        trips = generate_business_trips()
-        await display_business_trips(message.chat.id, trips, current_page=0)
+        if open_trips:
+            await bot.send_message(message.chat.id, "У вас есть открытые командировки:", reply_markup=generate_open_trips_keyboard())
+        else:
+            await bot.send_message(message.chat.id, "У вас нет открытых командировок.", reply_markup=main_keyboard)
     elif message.text == button5.text:
         await bot.send_message(message.chat.id, "Как пользоваться ботом?", reply_markup=main_keyboard)
 
@@ -132,10 +144,34 @@ async def menu_buttons_handler(message: types.Message):
 async def date_input_handler(message: types.Message):
     entered_date = message.text
     try:
-        datetime.strptime(entered_date, "%d.%m.%Y")
-        await bot.send_message(message.chat.id, f"Командировка успешно создана с именем: {entered_date}", reply_markup=main_keyboard)
+        start_date = datetime.strptime(entered_date, "%d.%m.%Y")
+        # Добавляем командировку
+        open_trip_id = len(open_trips) + 1
+        open_trip_name = f"{entered_date}-"
+        open_trips[open_trip_id] = open_trip_name
+        await bot.send_message(message.chat.id, f"Командировка успешно создана с именем: {open_trip_name}", reply_markup=main_keyboard)
     except:
         await bot.send_message(message.chat.id, "Неверный формат. Укажите дату начала командировки в формате ДД.ММ.ГГ", reply_markup=main_keyboard)
+
+# Обработчик нажатий на кнопки Inline с открытыми командировками
+@dp.callback_query_handler(lambda c: c.data.startswith("open_trip:"))
+async def open_trips_handler(callback_query: types.CallbackQuery):
+    trip_id = int(callback_query.data[10:])
+    trip_name = open_trips[trip_id]
+    date = trip_name[:-1] # удаляем "-"
+    month_year = datetime.strptime(date, "%d.%m.%Y").strftime("%B %Y")
+    await bot.send_message(callback_query.from_user.id, f"Командировка: {month_year}\nДата начала: {date}\nУкажите дату закрытия:")
+    await bot.answer_callback_query(callback_query.id)
+
+# Обработчик ввода даты закрытия командировки
+@dp.message_handler(lambda message: message.reply_to_message and message.reply_to_message.text.startswith("Командировка:"), content_types=types.ContentType.TEXT)
+async def close_trip_date_handler(message: types.Message):
+    entered_date = message.text
+    try:
+        end_date = datetime.strptime(entered_date, "%d.%m.%Y")
+        await bot.send_message(message.chat.id, "Командировка успешно завершена", reply_markup=main_keyboard)
+    except:
+        await bot.send_message(message.chat.id, "Неверный формат. Укажите дату закрытия командировки в формате ДД.ММ.ГГ", reply_markup=main_keyboard)
 
 # Обработчик кнопки возврата в основное меню
 @dp.callback_query_handler(lambda c: c.data == 'main_menu')
