@@ -44,7 +44,17 @@ open_trips = {}
 async def ask_expense_amount(chat_id, expense_name):
     global expense_type
     expense_type = expense_name
-    await bot.send_message(chat_id, f"Добавляем статью расхода: {expense_name}\nУкажите сумму:")
+    cancel_button = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    cancel_button.add(KeyboardButton('Отменить'))
+    await bot.send_message(chat_id, f"Добавляем статью расхода: {expense_name}\nУкажите сумму:", reply_markup=cancel_button)
+
+# Обработчик для кнопки "Отменить"
+@dp.message_handler(lambda message: message.text == 'Отменить')
+async def cancel_handler(message: types.Message):
+    global expense_type
+    expense_type = None
+    await bot.send_message(message.chat.id, "Ввод данных отменен", reply_markup=main_keyboard)
+
 
 # Обработчик нажатий кнопок расходов
 @dp.callback_query_handler(lambda c: c.data in ["tickets", "accommodation", "entertainment"])
@@ -61,14 +71,15 @@ async def process_expense_buttons(callback_query: types.CallbackQuery):
     await ask_expense_amount(callback_query.from_user.id, expense_name)
     await bot.answer_callback_query(callback_query.id)
 
-# Обработчик сообщений с суммами для статей расходов
 @dp.message_handler(lambda message: message.text and expense_type, content_types=types.ContentType.TEXT)
 async def amount_input_handler(message: types.Message):
     global expense_type
 
     try:
         amount = float(message.text)
-        await bot.send_message(message.chat.id, f"Добавляем статью расхода: {expense_type}\nСумма: {amount}\nПрикрепите фото чека:")
+        cancel_button = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+        cancel_button.add(KeyboardButton('Отменить'))
+        await bot.send_message(message.chat.id, f"Добавляем статью расхода: {expense_type}\nСумма: {amount}\nПрикрепите фото чека:", reply_markup=cancel_button)
     except ValueError:
         await bot.send_message(message.chat.id, "Некорректное значение суммы. Введите число:")
 
