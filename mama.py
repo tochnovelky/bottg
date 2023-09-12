@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from datetime import datetime
+from aiogram.dispatcher import FSMContext
 from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.types import (
@@ -10,7 +11,6 @@ from aiogram.types import (
     InlineKeyboardButton,
 )
 
-# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
 # Инициализация бота и диспетчера
@@ -18,7 +18,7 @@ bot = Bot(token='6584652808:AAGdp1-TcXf9RkHiiF9Fuji9w3c46do67Vo')
 dp = Dispatcher(bot)
 dp.middleware.setup(LoggingMiddleware())
 
-# Создание основной клавиатуры
+# Основные клавиши
 main_keyboard = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False, row_width=2)
 button1 = KeyboardButton('Мои командировки')
 button2 = KeyboardButton('Добавить расходы')
@@ -27,7 +27,6 @@ button4 = KeyboardButton('Завершить командировку')
 button5 = KeyboardButton('Как пользоваться')
 main_keyboard.add(button1, button2, button3, button4, button5)
 
-# Создание клавиатуры расходов
 expenses_keyboard = InlineKeyboardMarkup()
 expenses_keyboard.add(
     InlineKeyboardButton(text="Билеты", callback_data="tickets"),
@@ -37,26 +36,22 @@ expenses_keyboard.add(
 
 expense_type = None
 
-# Создание переменной для хранения открытых командировок
+
+
+# Переменные для хранения открытых командировок
 open_trips = {}
 
-# Функция для запроса суммы расхода у пользователя
-async def ask_expense_amount(chat_id, expense_name):
-    global expense_type
-    expense_type = expense_name
+# Функция запроса суммы расхода у пользователя
+async def ask_expense_amount(chat_id, expense_name, expense_type):
     cancel_button = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     cancel_button.add(KeyboardButton('Отменить'))
     await bot.send_message(chat_id, f"Добавляем статью расхода: {expense_name}\nУкажите сумму:", reply_markup=cancel_button)
+    return expense_type
 
-# Обработчик для кнопки "Отменить"
 @dp.message_handler(lambda message: message.text == 'Отменить')
 async def cancel_handler(message: types.Message):
-    global expense_type
-    expense_type = None
     await bot.send_message(message.chat.id, "Ввод данных отменен", reply_markup=main_keyboard)
 
-
-# Обработчик нажатий кнопок расходов
 @dp.callback_query_handler(lambda c: c.data in ["tickets", "accommodation", "entertainment"])
 async def process_expense_buttons(callback_query: types.CallbackQuery):
     data = callback_query.data
@@ -68,13 +63,11 @@ async def process_expense_buttons(callback_query: types.CallbackQuery):
     elif data == 'entertainment':
         expense_name = "Представительские расходы"
 
-    await ask_expense_amount(callback_query.from_user.id, expense_name)
+    expense_type = await ask_expense_amount(callback_query.from_user.id, expense_name, data)
     await bot.answer_callback_query(callback_query.id)
 
 @dp.message_handler(lambda message: message.text and expense_type, content_types=types.ContentType.TEXT)
 async def amount_input_handler(message: types.Message):
-    global expense_type
-
     try:
         amount = float(message.text)
         cancel_button = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
@@ -97,21 +90,28 @@ def generate_open_trips_keyboard():
         keyboard.add(InlineKeyboardButton(text=value, callback_data=f"open_trip:{key}"))
     return keyboard
 
+
+
 # Функция для генерации пагинатора список командировок
 def generate_trips_paginator(trips, current_page):
     keyboard = InlineKeyboardMarkup()
-    for trip in trips[current_page * 5:(current_page * 5) + 5]:
+
+    start_index = current_page * 5
+    end_index = start_index + 5
+
+    for trip in trips[start_index:end_index]:
         keyboard.add(InlineKeyboardButton(text=trip, callback_data=f'trip:{trip}'))
 
     if current_page > 0:
-        keyboard.add(InlineKeyboardButton(text='\u00AB', callback_data=f'prev_trips_page:{current_page - 1}'))
+        keyboard.add(InlineKeyboardButton(text='\u00AB', callback_data=f'paginate:prev_trips_page'))
 
-    if len(trips) > (current_page + 1) * 5:
-        keyboard.add(InlineKeyboardButton(text='\u00BB', callback_data=f'next_trips_page:{current_page + 1}'))
+    if end_index < len(trips):
+        keyboard.add(InlineKeyboardButton(text='\u00BB', callback_data=f'paginate:next_trips_page'))
 
     keyboard.add(InlineKeyboardButton(text="Назад", callback_data="main_menu"))
 
     return keyboard
+
 
 # Функция для отображения списка командировок пользователя
 async def display_business_trips(chat_id, trips, current_page):
@@ -191,21 +191,22 @@ async def process_callback_button1(callback_query: types.CallbackQuery):
     await bot.answer_callback_query(callback_query.id)
 
 # Обработчик прочих действий пагинатора и кнопок
-@dp.callback_query_handler(lambda c: True)
-async def process_callback_button2(callback_query: types.CallbackQuery):
-    data = callback_query.data.split(':')
-    action = data[0]
+@dp.callback_query_handler(lambda c: c.data.startswith('paginate:'), state="*")
+async def process_pagination(callback_query: types.CallbackQuery, state: FSMContext):
+    async with state.proxy() as data:
+        current_trips_page = data.get('current_trips_page', 0)
 
-    if action == 'trip':
-        trip = data[1]
-        await bot.send_message(callback_query.from_user.id, f"Выбрана командировка {trip}\nДата создания: 01.01.2022", reply_markup=expenses_keyboard)
-    elif action == 'prev_trips_page' or action == 'next_trips_page':
-        current_page = int(data[1])
+        direction = callback_query.data.split(':')[1]
+
+        if direction == 'prev_trips_page':
+            current_trips_page = max(0, current_trips_page - 1)
+        elif direction == 'next_trips_page':
+            current_trips_page += 1
+
+        data['current_trips_page'] = current_trips_page
+
         trips = generate_business_trips()
-        await display_business_trips(callback_query.from_user.id, trips, current_page)
-    elif action == 'back_to_trips':
-        trips = generate_business_trips()
-        await display_business_trips(callback_query.from_user.id, trips, current_page=0)
+        await bot.edit_message_reply_markup(callback_query.message.chat.id, callback_query.message.message_id, reply_markup=generate_trips_paginator(trips, current_trips_page))
 
     await bot.answer_callback_query(callback_query.id)
 
