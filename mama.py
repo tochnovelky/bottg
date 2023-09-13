@@ -41,6 +41,20 @@ expense_type = None
 # Переменные для хранения открытых командировок
 open_trips = {}
 
+# Создаем словарь для хранения командировок (замените это на вашу реальную базу данных)
+business_trips_db = {
+    1: "Командировка 1",
+    2: "Командировка 2",
+    3: "Командировка 3",
+    4: "Командировка 4",
+    5: "Командировка 5",
+    6: "Командировка 6",
+    7: "Командировка 7",
+    8: "Командировка 8",
+    9: "Командировка 9",
+    10: "Командировка 10",
+}
+
 # Функция запроса суммы расхода у пользователя
 async def ask_expense_amount(chat_id, expense_name, expense_type):
     cancel_button = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
@@ -99,8 +113,9 @@ def generate_trips_paginator(trips, current_page):
     start_index = current_page * 5
     end_index = start_index + 5
 
-    for trip in trips[start_index:end_index]:
-        keyboard.add(InlineKeyboardButton(text=trip, callback_data=f'trip:{trip}'))
+    for trip_id in trips[start_index:end_index]:
+        trip_name = get_trip_name(trip_id)
+        keyboard.add(InlineKeyboardButton(text=trip_name, callback_data=f'trip:{trip_id}'))
 
     if current_page > 0:
         keyboard.add(InlineKeyboardButton(text='\u00AB', callback_data=f'paginate:prev_trips_page'))
@@ -113,14 +128,22 @@ def generate_trips_paginator(trips, current_page):
     return keyboard
 
 
+# Функция для генерации списка командировок (заглушка)
+def generate_business_trips():
+    return [trip["id"] for trip in business_trips]
+
 # Функция для отображения списка командировок пользователя
 async def display_business_trips(chat_id, trips, current_page):
     await bot.send_message(chat_id, "Выберите командировку:", reply_markup=generate_trips_paginator(trips, current_page))
 
 # Функция для генерации списка командировок (заглушка)
 def generate_business_trips():
-    trips = [f'Командировка {i}' for i in range(1, 11)]
+    trips = list(business_trips_db.keys())
     return trips
+
+# Функция для получения названия командировки по ее ID
+def get_trip_name(trip_id):
+    return business_trips_db.get(trip_id, "Название не найдено")
 
 # Обработчик команды /start
 @dp.message_handler(commands=['start'])
@@ -131,6 +154,18 @@ async def start_message_handler(message: types.Message):
 @dp.message_handler(lambda message: message.text not in [button1.text, button2.text, button3.text, button4.text, button5.text], content_types=types.ContentType.TEXT)
 async def text_message_handler(message: types.Message):
     await bot.send_message(message.chat.id, "Неизвестная команда. Пожалуйста, выберите действие из предложенного списка:", reply_markup=main_keyboard)
+@dp.message_handler(lambda message: message.text == button1.text, content_types=types.ContentType.TEXT)
+
+
+@dp.message_handler(lambda message: message.text == button1.text, content_types=types.ContentType.TEXT)
+async def my_business_trips_handler(message: types.Message, state: FSMContext):
+    trips = generate_business_trips()
+    await display_business_trips(message.chat.id, trips, current_page=0)
+
+@dp.message_handler(lambda message: message.text == button1.text, content_types=types.ContentType.TEXT)
+async def my_business_trips_handler(message: types.Message, state: FSMContext):
+    trips = generate_business_trips()
+    await display_business_trips(message.chat.id, trips, current_page=0)
 
 # Обработчик нажатий кнопок основного меню
 @dp.message_handler(lambda message: message.text in [button1.text, button2.text, button3.text, button4.text, button5.text], content_types=types.ContentType.TEXT)
@@ -168,11 +203,10 @@ async def date_input_handler(message: types.Message):
 @dp.callback_query_handler(lambda c: c.data.startswith("open_trip:"))
 async def open_trips_handler(callback_query: types.CallbackQuery):
     trip_id = int(callback_query.data[10:])
-    trip_name = open_trips[trip_id]
-    date = trip_name[:-1] # удаляем "-"
-    month_year = datetime.strptime(date, "%d.%m.%Y").strftime("%B %Y")
-    await bot.send_message(callback_query.from_user.id, f"Командировка: {month_year}\nДата начала: {date}\nУкажите дату закрытия:")
+    trip_name = business_trips_db.get(trip_id, "Название не найдено")
+    await bot.send_message(callback_query.from_user.id, f"Командировка: {trip_name}\nУкажите дату закрытия:")
     await bot.answer_callback_query(callback_query.id)
+
 
 # Обработчик ввода даты закрытия командировки
 @dp.message_handler(lambda message: message.reply_to_message and message.reply_to_message.text.startswith("Командировка:"), content_types=types.ContentType.TEXT)
