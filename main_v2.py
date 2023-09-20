@@ -239,28 +239,6 @@ async def taxi_trip_message(message: types.Message, state: FSMContext):
         await bot.send_message(message.chat.id,
                                f"\nВведите дату расхода в формате ДД.ММ.ГГГГ:",
                                reply_markup=cancel_keyboard)
-
-@dp.callback_query_handler(lambda c: c.data.startswith('id:'), state=AddNewExpenseEntertainment.waiting_for_trip)
-async def entertainment_trip_added_message(callback_query: types.CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    expense = data.get('expense')
-    trips_ids = data.get('trips_ids')
-    trip_id = str(callback_query.data.split(':')[1])
-
-    await bot.answer_callback_query(callback_query.id)
-
-    if trip_id not in trips_ids:
-        await bot.send_message(callback_query.message.chat.id, "Такой командировки не найдено(")
-    else:
-        chosen_trip_name = session.query(BusinessTrip).filter_by(id=int(trip_id)).first()
-        chosen_trip_name = chosen_trip_name.name
-        await state.update_data(chosen_trip_id=trip_id)
-        await state.update_data(chosen_trip_name=chosen_trip_name)
-        await state.set_state(AddNewExpenseEntertainment.waiting_for_date.state)
-        await bot.send_message(callback_query.message.chat.id,
-                               f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nВведите дату в формате ДД.ММ.ГГГГ:")
-
-
 @dp.callback_query_handler(lambda c: c.data.startswith('id:'), state=AddNewExpenseTaxi.waiting_for_trip)
 async def taxi_trip_added_message(callback_query: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
@@ -281,21 +259,6 @@ async def taxi_trip_added_message(callback_query: types.CallbackQuery, state: FS
         await bot.send_message(callback_query.message.chat.id,
                                f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nВведите дату в формате ДД.ММ.ГГГГ:")
 
-@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_date, content_types=types.ContentType.TEXT)
-async def entertainment_date_message(message: types.Message, state: FSMContext):
-    date_pattern = r'^(0[1-9]|[12][0-9]|3[01])\.(0[1-9]|1[0-2])\.\d{4}$'
-    if not re.match(date_pattern, message.text):
-        await bot.send_message(message.chat.id, "Создание новой командировки.\nПожалуйста, введите дату в формате "
-                                                "ДД.ММ.ГГГГ:")
-        return
-    data = await state.get_data()
-    expense = data.get('expense')
-    chosen_trip_name = data.get('chosen_trip_name')
-    await state.update_data(date=message.text)
-    await state.set_state(AddNewExpenseEntertainment.waiting_for_place.state)
-    await bot.send_message(message.chat.id,
-                           f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nДата: {message.text}\n\nУкажите место:")
-
 @dp.message_handler(state=AddNewExpenseTaxi.waiting_for_date, content_types=types.ContentType.TEXT)
 async def taxi_date_message(message: types.Message, state: FSMContext):
     date_pattern = r'^(0[1-9]|[12][0-9]|3[01])\.(0[1-9]|1[0-2])\.\d{4}$'
@@ -311,17 +274,6 @@ async def taxi_date_message(message: types.Message, state: FSMContext):
     await bot.send_message(message.chat.id,
                            f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nДата: {message.text}\n\nУкажите место:")
 
-@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_place, content_types=types.ContentType.TEXT)
-async def entertainment_place_message(message: types.Message, state: FSMContext):
-    await state.update_data(place=message.text)
-    data = await state.get_data()
-    expense = data.get('expense')
-    date = data.get('date')
-    chosen_trip_name = data.get('chosen_trip_name')
-
-    await state.set_state(AddNewExpenseEntertainment.waiting_for_purpose.state)
-    await bot.send_message(message.chat.id,
-                           f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nДата: {date}\nМесто: {message.text}\n\nВведите цель встречи:")
 
 @dp.message_handler(state=AddNewExpenseTaxi.waiting_for_place, content_types=types.ContentType.TEXT)
 async def taxi_place_message(message: types.Message, state: FSMContext):
@@ -393,101 +345,6 @@ async def taxi_amount_message(message: types.Message, state: FSMContext):
     await bot.send_message(message.chat.id,
                            f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nДата: {date}\nМесто: {place}\nКуда?: {were}\n\nОткуда:{were_from}\n\n Цель поездки:{purpose}n\n\ Прикрепите фото чека: ")
 
-@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_purpose, content_types=types.ContentType.TEXT)
-async def entertainment_purpose_message(message: types.Message, state: FSMContext):
-    await state.update_data(purpose=message.text)
-    data = await state.get_data()
-    expense = data.get('expense')
-    date = data.get('date')
-    place = data.get('place')
-    chosen_trip_name = data.get('chosen_trip_name')
-
-    await state.set_state(AddNewExpenseEntertainment.waiting_for_members.state)
-    await bot.send_message(message.chat.id,
-                           f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nДата: {date}\nМесто: {place}\nЦель встречи: {massage.text}\n\nУкажите участников встречи:")
-
-
-@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_members, content_types=types.ContentType.TEXT)
-async def entertainment_members_message(message: types.Message, state: FSMContext):
-    await state.update_data(members=message.text)
-    data = await state.get_data()
-    expense = data.get('expense')
-    date = data.get('date')
-    place = data.get('place')
-    purpose = data.get('purpose')
-    chosen_trip_name = data.get('chosen_trip_name')
-
-    await state.set_state(AddNewExpenseEntertainment.waiting_for_result.state)
-    await bot.send_message(message.chat.id,
-                           f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nДата: {date}\nМесто: {place}\nЦель встречи: {purpose}\nУчастники:{message.text}\n\nУкажите результат встречи:")
-
-
-@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_result, content_types=types.ContentType.TEXT)
-async def entertainment_result_message(message: types.Message, state: FSMContext):
-    await state.update_data(result=message.text)
-    data = await state.get_data()
-    expense = data.get('expense')
-    date = data.get('date')
-    place = data.get('place')
-    purpose = data.get('purpose')
-    chosen_trip_name = data.get('chosen_trip_name')
-    members = data.get('members')
-
-    await state.set_state(AddNewExpenseEntertainment.waiting_for_amount.state)
-    await bot.send_message(message.chat.id,
-                           f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nДата: {date}\nМесто: {place}\nЦель встречи: {purpose}\nУчастники:{members}\nРезультат встречи: {message.text}\n\nУкажите сумму:")
-
-
-@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_amount, content_types=types.ContentType.TEXT)
-async def entertainment_amount_message(message: types.Message, state: FSMContext):
-    amount = float(message.text)
-    await state.update_data(amount=amount)
-    data = await state.get_data()
-    expense = data.get('expense')
-    date = data.get('date')
-    place = data.get('place')
-    purpose = data.get('purpose')
-    members = data.get('members')
-    chosen_trip_name = data.get('chosen_trip_name')
-    result = data.get('result')
-
-    try:
-        await state.set_state(AddNewExpenseEntertainment.waiting_for_answer_receipt.state)
-        await bot.send_message(message.chat.id,
-                               f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nДата: {date}\nМесто: {place}\nЦель встречи: {purpose}\nУчастники:{members}\nРезультат встречи: {result}\nСумма: {amount}\n\nУ вас электронный чек или физический?",
-                               reply_markup=receipt_question_keyboard)
-    except ValueError:
-        await bot.send_message(message.chat.id, "Некорректное значение суммы. Введите число:")
-        return
-
-
-@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_answer_receipt, content_types=types.ContentType.TEXT)
-async def entertainment_answer_receipt_message(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    expense = data.get('expense')
-    date = data.get('date')
-    place = data.get('place')
-    purpose = data.get('purpose')
-    members = data.get('members')
-    amount = data.get('amount')
-    chosen_trip_name = data.get('chosen_trip_name')
-    result = data.get('result')
-
-    if message.text in ['Физический', 'физический']:
-        await state.set_state(AddNewExpenseEntertainment.waiting_for_receipt_number.state)
-
-        await bot.send_message(message.chat.id,
-                               f"Командировка: {chosen_trip_name}\nРасход: {expense}\nДата: {date}\nМесто: {place}"
-                               f"\nЦель встречи: {purpose}\nУчастники:{members}\nРезультат встречи: {result}\nСумма: "
-                               f"{amount}\n\nВведите номер чека:",
-                               reply_markup=cancel_keyboard)
-    if message.text in ['Электронный', 'электронный']:
-        await state.set_state(AddNewExpenseEntertainment.waiting_for_receipt.state)
-        await bot.send_message(message.chat.id,
-                               f"Командировка: {chosen_trip_name}\nРасход: {expense}\nДата: {date}\nМесто: {place}"
-                               f"\nЦель встречи: {purpose}\nУчастники:{members}\nРезультат встречи: {result}\nСумма: "
-                               f"{amount}\n\nПрикрепите фото чека или файл в формате PDF:",
-                               reply_markup=cancel_keyboard)
 
 
 @dp.message_handler(state=AddNewExpenseTaxi.waiting_for_answer_receipt, content_types=types.ContentType.TEXT)
@@ -542,98 +399,6 @@ async def taxi_photo_message(message: types.Message, state: FSMContext):
     await bot.send_message(message.chat.id,
                            f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nДата: {date}\nМесто: {place}\nКуда?: {were}\n\nОткуда:{were_from}\n\n Цель поездки:{purpose}\n\nПришлите фото поездки :",
                                reply_markup=cancel_keyboard)
-
-
-@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_receipt,
-                    content_types=[types.ContentType.PHOTO])
-async def entertainment_photo_message(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    expense = data.get('expense')
-    date = data.get('date')
-    place = data.get('place')
-    purpose = data.get('purpose')
-    members = data.get('members')
-    amount = data.get('amount')
-    chosen_trip_name = data.get('chosen_trip_name')
-    result = data.get('result')
-    additional_list = data.get('additional_list')
-
-    await message.answer("Вы отправили фотографию!")
-    name = name_generator()
-    name_pdf = name_generator()
-    # Добавили имя доп файла (бывшего фото) в список с названиями всех остальных таких файлов
-    additional_list.append(name_pdf)
-    await state.update_data(additional_list=additional_list)
-
-    await message.photo[-1].download(destination_file=f'photo_files/{name}.jpeg')
-
-    from_photo_to_pdf(image_path=f'photo_files/{name}.jpeg', pdf_path=f'pdf_files/{name_pdf}.pdf')
-
-    await state.set_state(AddNewExpenseEntertainment.waiting_for_receipt_number.state)
-    await bot.send_message(message.chat.id,
-                           f"Командировка: {chosen_trip_name}\nРасход: {expense}\nДата: {date}\nМесто: {place}"
-                           f"\nЦель встречи: {purpose}\nУчастники:{members}\nРезультат встречи: {result}\nСумма: "
-                           f"{amount}\nЧек прикреплен\n\nВведите номер чека:",
-                           reply_markup=cancel_keyboard)
-
-
-@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_receipt, content_types=[types.ContentType.DOCUMENT])
-async def entertainment_file_message(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    expense = data.get('expense')
-    date = data.get('date')
-    place = data.get('place')
-    purpose = data.get('purpose')
-    members = data.get('members')
-    amount = data.get('amount')
-    chosen_trip_name = data.get('chosen_trip_name')
-    result = data.get('result')
-    additional_list = data.get('additional_list')
-
-    print('message.document.mime_type')
-    print(message.document.mime_type)
-
-    if message.document.mime_type == 'application/pdf':
-        await message.answer("Вы отправили PDF файл!")
-        # Если это PDF-файл, сохраняем его в папке pdf_files
-        file_id = message.document.file_id
-        file_path = await bot.get_file(file_id)
-        file_name = name_generator()
-        await file_path.download(os.path.join('pdf_files', f'{file_name}.pdf'))
-
-        additional_list.append(file_name)
-        await state.update_data(additional_list=additional_list)
-
-        await state.set_state(AddNewExpenseEntertainment.waiting_for_receipt_number.state)
-        await bot.send_message(message.chat.id,
-                               f"Командировка: {chosen_trip_name}\nРасход: {expense}\nДата: {date}\nМесто: {place}"
-                               f"\nЦель встречи: {purpose}\nУчастники:{members}\nРезультат встречи: {result}\nСумма: "
-                               f"{amount}\nЧек прикреплен\n\nВведите номер чека:",
-                               reply_markup=cancel_keyboard)
-
-    elif message.document.mime_type in ['image/png', 'image/jpeg']:
-        await message.answer("Вы отправили фотографию как файл!")
-        name = name_generator()
-        name_pdf = name_generator()
-        file_id = message.document.file_id
-        file_path = await bot.get_file(file_id)
-        await file_path.download(os.path.join('photo_files', f'{name}.jpeg'))
-
-        from_photo_to_pdf(image_path=f'photo_files/{name}.jpeg', pdf_path=f'pdf_files/{name_pdf}.pdf')
-
-        # Добавили имя доп файла (бывшего фото) в список с названиями всех остальных таких файлов
-        additional_list.append(name_pdf)
-        await state.update_data(additional_list=additional_list)
-
-        await state.set_state(AddNewExpenseEntertainment.waiting_for_receipt_number.state)
-        await bot.send_message(message.chat.id,
-                               f"Командировка: {chosen_trip_name}\nРасход: {expense}\nДата: {date}\nМесто: {place}"
-                               f"\nЦель встречи: {purpose}\nУчастники:{members}\nРезультат встречи: {result}\nСумма: "
-                               f"{amount}\nЧек прикреплен\n\nВведите номер чека:",
-                               reply_markup=cancel_keyboard)
-
-    else:
-        await bot.send_message(message.chat.id, 'Прикрепите фото в формате JPEG или PNG или файл PDF:')
 
 @dp.message_handler(state=AddNewExpenseTaxi.waiting_for_receipt, content_types=[types.ContentType.DOCUMENT])
 async def taxi_file_message(message: types.Message, state: FSMContext):
@@ -766,6 +531,248 @@ async def taxi_filescreenshot_message(message: types.Message, state: FSMContext)
         await state.set_state(AddNewExpenseTaxi.waiting_for_screenshot.state)
         await bot.send_message(message.chat.id,
                                f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nДата: {date}\nМесто: {place}\nКуда?: {were}\n\nОткуда:{were_from}\n\n Цель поездки:{purpose}\n\nФото аоездки прикреплено",
+                               reply_markup=cancel_keyboard)
+
+    else:
+        await bot.send_message(message.chat.id, 'Прикрепите фото в формате JPEG или PNG или файл PDF:')
+
+
+
+@dp.callback_query_handler(lambda c: c.data.startswith('id:'), state=AddNewExpenseEntertainment.waiting_for_trip)
+async def entertainment_trip_added_message(callback_query: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    expense = data.get('expense')
+    trips_ids = data.get('trips_ids')
+    trip_id = str(callback_query.data.split(':')[1])
+
+    await bot.answer_callback_query(callback_query.id)
+
+    if trip_id not in trips_ids:
+        await bot.send_message(callback_query.message.chat.id, "Такой командировки не найдено(")
+    else:
+        chosen_trip_name = session.query(BusinessTrip).filter_by(id=int(trip_id)).first()
+        chosen_trip_name = chosen_trip_name.name
+        await state.update_data(chosen_trip_id=trip_id)
+        await state.update_data(chosen_trip_name=chosen_trip_name)
+        await state.set_state(AddNewExpenseEntertainment.waiting_for_date.state)
+        await bot.send_message(callback_query.message.chat.id,
+                               f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nВведите дату в формате ДД.ММ.ГГГГ:")
+
+
+
+@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_date, content_types=types.ContentType.TEXT)
+async def entertainment_date_message(message: types.Message, state: FSMContext):
+    date_pattern = r'^(0[1-9]|[12][0-9]|3[01])\.(0[1-9]|1[0-2])\.\d{4}$'
+    if not re.match(date_pattern, message.text):
+        await bot.send_message(message.chat.id, "Создание новой командировки.\nПожалуйста, введите дату в формате "
+                                                "ДД.ММ.ГГГГ:")
+        return
+    data = await state.get_data()
+    expense = data.get('expense')
+    chosen_trip_name = data.get('chosen_trip_name')
+    await state.update_data(date=message.text)
+    await state.set_state(AddNewExpenseEntertainment.waiting_for_place.state)
+    await bot.send_message(message.chat.id,
+                           f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nДата: {message.text}\n\nУкажите место:")
+
+
+@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_place, content_types=types.ContentType.TEXT)
+async def entertainment_place_message(message: types.Message, state: FSMContext):
+    await state.update_data(place=message.text)
+    data = await state.get_data()
+    expense = data.get('expense')
+    date = data.get('date')
+    chosen_trip_name = data.get('chosen_trip_name')
+
+    await state.set_state(AddNewExpenseEntertainment.waiting_for_purpose.state)
+    await bot.send_message(message.chat.id,
+                           f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nДата: {date}\nМесто: {message.text}\n\nВведите цель встречи:")
+
+
+@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_purpose, content_types=types.ContentType.TEXT)
+async def entertainment_purpose_message(message: types.Message, state: FSMContext):
+    await state.update_data(purpose=message.text)
+    data = await state.get_data()
+    expense = data.get('expense')
+    date = data.get('date')
+    place = data.get('place')
+    chosen_trip_name = data.get('chosen_trip_name')
+
+    await state.set_state(AddNewExpenseEntertainment.waiting_for_members.state)
+    await bot.send_message(message.chat.id,
+                           f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nДата: {date}\nМесто: {place}\nЦель встречи: {massage.text}\n\nУкажите участников встречи:")
+
+
+@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_members, content_types=types.ContentType.TEXT)
+async def entertainment_members_message(message: types.Message, state: FSMContext):
+    await state.update_data(members=message.text)
+    data = await state.get_data()
+    expense = data.get('expense')
+    date = data.get('date')
+    place = data.get('place')
+    purpose = data.get('purpose')
+    chosen_trip_name = data.get('chosen_trip_name')
+
+    await state.set_state(AddNewExpenseEntertainment.waiting_for_result.state)
+    await bot.send_message(message.chat.id,
+                           f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nДата: {date}\nМесто: {place}\nЦель встречи: {purpose}\nУчастники:{message.text}\n\nУкажите результат встречи:")
+
+
+@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_result, content_types=types.ContentType.TEXT)
+async def entertainment_result_message(message: types.Message, state: FSMContext):
+    await state.update_data(result=message.text)
+    data = await state.get_data()
+    expense = data.get('expense')
+    date = data.get('date')
+    place = data.get('place')
+    purpose = data.get('purpose')
+    chosen_trip_name = data.get('chosen_trip_name')
+    members = data.get('members')
+
+    await state.set_state(AddNewExpenseEntertainment.waiting_for_amount.state)
+    await bot.send_message(message.chat.id,
+                           f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nДата: {date}\nМесто: {place}\nЦель встречи: {purpose}\nУчастники:{members}\nРезультат встречи: {message.text}\n\nУкажите сумму:")
+
+
+@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_amount, content_types=types.ContentType.TEXT)
+async def entertainment_amount_message(message: types.Message, state: FSMContext):
+    amount = float(message.text)
+    await state.update_data(amount=amount)
+    data = await state.get_data()
+    expense = data.get('expense')
+    date = data.get('date')
+    place = data.get('place')
+    purpose = data.get('purpose')
+    members = data.get('members')
+    chosen_trip_name = data.get('chosen_trip_name')
+    result = data.get('result')
+
+    try:
+        await state.set_state(AddNewExpenseEntertainment.waiting_for_answer_receipt.state)
+        await bot.send_message(message.chat.id,
+                               f"Командировка: {chosen_trip_name}\nРасход: {expense}\n\nДата: {date}\nМесто: {place}\nЦель встречи: {purpose}\nУчастники:{members}\nРезультат встречи: {result}\nСумма: {amount}\n\nУ вас электронный чек или физический?",
+                               reply_markup=receipt_question_keyboard)
+    except ValueError:
+        await bot.send_message(message.chat.id, "Некорректное значение суммы. Введите число:")
+        return
+
+
+@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_answer_receipt, content_types=types.ContentType.TEXT)
+async def entertainment_answer_receipt_message(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    expense = data.get('expense')
+    date = data.get('date')
+    place = data.get('place')
+    purpose = data.get('purpose')
+    members = data.get('members')
+    amount = data.get('amount')
+    chosen_trip_name = data.get('chosen_trip_name')
+    result = data.get('result')
+
+    if message.text in ['Физический', 'физический']:
+        await state.set_state(AddNewExpenseEntertainment.waiting_for_receipt_number.state)
+
+        await bot.send_message(message.chat.id,
+                               f"Командировка: {chosen_trip_name}\nРасход: {expense}\nДата: {date}\nМесто: {place}"
+                               f"\nЦель встречи: {purpose}\nУчастники:{members}\nРезультат встречи: {result}\nСумма: "
+                               f"{amount}\n\nВведите номер чека:",
+                               reply_markup=cancel_keyboard)
+    if message.text in ['Электронный', 'электронный']:
+        await state.set_state(AddNewExpenseEntertainment.waiting_for_receipt.state)
+        await bot.send_message(message.chat.id,
+                               f"Командировка: {chosen_trip_name}\nРасход: {expense}\nДата: {date}\nМесто: {place}"
+                               f"\nЦель встречи: {purpose}\nУчастники:{members}\nРезультат встречи: {result}\nСумма: "
+                               f"{amount}\n\nПрикрепите фото чека или файл в формате PDF:",
+                               reply_markup=cancel_keyboard)
+
+
+
+@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_receipt,
+                    content_types=[types.ContentType.PHOTO])
+async def entertainment_photo_message(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    expense = data.get('expense')
+    date = data.get('date')
+    place = data.get('place')
+    purpose = data.get('purpose')
+    members = data.get('members')
+    amount = data.get('amount')
+    chosen_trip_name = data.get('chosen_trip_name')
+    result = data.get('result')
+    additional_list = data.get('additional_list')
+
+    await message.answer("Вы отправили фотографию!")
+    name = name_generator()
+    name_pdf = name_generator()
+    # Добавили имя доп файла (бывшего фото) в список с названиями всех остальных таких файлов
+    additional_list.append(name_pdf)
+    await state.update_data(additional_list=additional_list)
+
+    await message.photo[-1].download(destination_file=f'photo_files/{name}.jpeg')
+
+    from_photo_to_pdf(image_path=f'photo_files/{name}.jpeg', pdf_path=f'pdf_files/{name_pdf}.pdf')
+
+    await state.set_state(AddNewExpenseEntertainment.waiting_for_receipt_number.state)
+    await bot.send_message(message.chat.id,
+                           f"Командировка: {chosen_trip_name}\nРасход: {expense}\nДата: {date}\nМесто: {place}"
+                           f"\nЦель встречи: {purpose}\nУчастники:{members}\nРезультат встречи: {result}\nСумма: "
+                           f"{amount}\nЧек прикреплен\n\nВведите номер чека:",
+                           reply_markup=cancel_keyboard)
+
+
+@dp.message_handler(state=AddNewExpenseEntertainment.waiting_for_receipt, content_types=[types.ContentType.DOCUMENT])
+async def entertainment_file_message(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    expense = data.get('expense')
+    date = data.get('date')
+    place = data.get('place')
+    purpose = data.get('purpose')
+    members = data.get('members')
+    amount = data.get('amount')
+    chosen_trip_name = data.get('chosen_trip_name')
+    result = data.get('result')
+    additional_list = data.get('additional_list')
+
+    print('message.document.mime_type')
+    print(message.document.mime_type)
+
+    if message.document.mime_type == 'application/pdf':
+        await message.answer("Вы отправили PDF файл!")
+        # Если это PDF-файл, сохраняем его в папке pdf_files
+        file_id = message.document.file_id
+        file_path = await bot.get_file(file_id)
+        file_name = name_generator()
+        await file_path.download(os.path.join('pdf_files', f'{file_name}.pdf'))
+
+        additional_list.append(file_name)
+        await state.update_data(additional_list=additional_list)
+
+        await state.set_state(AddNewExpenseEntertainment.waiting_for_receipt_number.state)
+        await bot.send_message(message.chat.id,
+                               f"Командировка: {chosen_trip_name}\nРасход: {expense}\nДата: {date}\nМесто: {place}"
+                               f"\nЦель встречи: {purpose}\nУчастники:{members}\nРезультат встречи: {result}\nСумма: "
+                               f"{amount}\nЧек прикреплен\n\nВведите номер чека:",
+                               reply_markup=cancel_keyboard)
+
+    elif message.document.mime_type in ['image/png', 'image/jpeg']:
+        await message.answer("Вы отправили фотографию как файл!")
+        name = name_generator()
+        name_pdf = name_generator()
+        file_id = message.document.file_id
+        file_path = await bot.get_file(file_id)
+        await file_path.download(os.path.join('photo_files', f'{name}.jpeg'))
+
+        from_photo_to_pdf(image_path=f'photo_files/{name}.jpeg', pdf_path=f'pdf_files/{name_pdf}.pdf')
+
+        # Добавили имя доп файла (бывшего фото) в список с названиями всех остальных таких файлов
+        additional_list.append(name_pdf)
+        await state.update_data(additional_list=additional_list)
+
+        await state.set_state(AddNewExpenseEntertainment.waiting_for_receipt_number.state)
+        await bot.send_message(message.chat.id,
+                               f"Командировка: {chosen_trip_name}\nРасход: {expense}\nДата: {date}\nМесто: {place}"
+                               f"\nЦель встречи: {purpose}\nУчастники:{members}\nРезультат встречи: {result}\nСумма: "
+                               f"{amount}\nЧек прикреплен\n\nВведите номер чека:",
                                reply_markup=cancel_keyboard)
 
     else:
